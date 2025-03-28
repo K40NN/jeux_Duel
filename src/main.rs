@@ -51,22 +51,24 @@ impl Game {
         }
     }
 }
-
 fn start_counter(player: &Player, miss: Arc<Mutex<i32>>) -> i32 {
     let mut counter = 0;
     let miss_clone = Arc::clone(&miss);
     let speed = player.speed;
     loop {
+        counter = (counter + 1) % 101;
+        // Efface la ligne actuelle
+        execute!(io::stdout(), Clear(ClearType::CurrentLine)).unwrap();
+        
         print!("\rCompteur = {}", counter);
         io::stdout().flush().unwrap();
         thread::sleep(Duration::from_millis(speed));
-        counter = (counter + 1) % 101;
-       if counter % 101 == 0 {
-        let mut miss = miss_clone.lock().unwrap();
-        *miss += 1;
-        // Efface la ligne actuelle
-        execute!(io::stdout(), Clear(ClearType::CurrentLine)).unwrap();
-       }
+        if counter == 0 {
+            let mut miss = miss_clone.lock().unwrap();
+            *miss += 1;
+            // Efface la ligne actuelle
+            execute!(io::stdout(), Clear(ClearType::CurrentLine)).unwrap();
+        }
         if event::poll(Duration::from_millis(30)).unwrap() {
             if let Event::Key(key_event) = event::read().unwrap() {
                 if key_event.code == KeyCode::Enter {
@@ -77,7 +79,6 @@ fn start_counter(player: &Player, miss: Arc<Mutex<i32>>) -> i32 {
     }
     counter
 }
-
 fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
     let mut total_score = 0;
     let mut obejctif_index = 0;

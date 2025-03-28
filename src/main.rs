@@ -142,7 +142,9 @@ fn apply_poison(winner: &mut Player, loser: &mut Player) {
         2 => loser.strength = loser.strength.saturating_sub(5),
         _ => println!("Choix invalide, aucun poison appliqué."),
     }
-}fn main() {
+}
+
+fn main() {
     let player1 = Player::new("Michel".to_string(), 50, 50, 50);
     let player2 = Player::new("Jacque".to_string(), 50, 50, 50);
 
@@ -150,15 +152,16 @@ fn apply_poison(winner: &mut Player, loser: &mut Player) {
 
     while game.player1.vitality > 0 && game.player2.vitality > 0 {
         game.generate_objectives(5);
+        let objectives_player1 = game.objectives.clone();
+        game.generate_objectives(5);
+        let objectives_player2 = game.objectives.clone();
 
         let score1 = {
-            let objectives = &game.objectives;
-            play_turn(&mut game.player1, objectives)
+            play_turn(&mut game.player1, &objectives_player1)
         };
         
         let score2 = {
-            let objectives = &game.objectives;
-            play_turn(&mut game.player2, objectives)
+            play_turn(&mut game.player2, &objectives_player2)
         };
 
         if score1 > score2 {

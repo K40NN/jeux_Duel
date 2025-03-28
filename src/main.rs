@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use crossterm::event::{self, Event, KeyCode};
+use crossterm::{execute, terminal::{Clear, ClearType}};
 
 #[derive(Debug)]
 struct Player {
@@ -63,6 +64,8 @@ fn start_counter(player: &Player, miss: Arc<Mutex<i32>>) -> i32 {
        if counter % 101 == 0 {
         let mut miss = miss_clone.lock().unwrap();
         *miss += 1;
+        // Efface la ligne actuelle
+        execute!(io::stdout(), Clear(ClearType::CurrentLine)).unwrap();
        }
         if event::poll(Duration::from_millis(30)).unwrap() {
             if let Event::Key(key_event) = event::read().unwrap() {
@@ -77,6 +80,7 @@ fn start_counter(player: &Player, miss: Arc<Mutex<i32>>) -> i32 {
 
 fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
     let mut total_score = 0;
+    let mut obejctif_index = 0;
 
     println!("Au tour de {} (Vitality={}, Speed={}, Strength={})", player.name, player.vitality, player.speed, player.strength);
     println!("→ Objectifs : {:?}", objectives);
@@ -88,6 +92,7 @@ fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
             }
         }
     }
+    
     for &objective in objectives.iter() {
         let miss = Arc::new(Mutex::new(0));
         let counter = start_counter(player, Arc::clone(&miss));
@@ -102,7 +107,15 @@ fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
             _ => (0 + player.strength) / (miss_value + 1),
         };
         total_score += score;
+        obejctif_index +=1 ;
         println!("→ Objectif {} : Miss = {} | Compteur = {}   // Score = {}", objective, miss_value, counter, score);
+        // Affiche les objectifs restants après chaque tour
+        let remaining_objectives: Vec<_> = objectives.iter().rev().take(objectives.len() - obejctif_index ).rev().collect();
+        println!("→ Objectifs restants : {:?}", remaining_objectives);
+            
+        // Ajoute un délai après avoir appuyé sur Enter
+        thread::sleep(Duration::from_secs(1));
+
     }
 
     let average_score = (total_score as f32 / objectives.len() as f32).ceil() as i32;
@@ -112,6 +125,8 @@ fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
     player.score = average_score;
     average_score
 }
+
+
 
 fn apply_poison(winner: &mut Player, loser: &mut Player) {
     println!("{} vous devez choisir quel poison appliquer à {} :", winner.name, loser.name);
@@ -127,9 +142,7 @@ fn apply_poison(winner: &mut Player, loser: &mut Player) {
         2 => loser.strength = loser.strength.saturating_sub(5),
         _ => println!("Choix invalide, aucun poison appliqué."),
     }
-}
-
-fn main() {
+}fn main() {
     let player1 = Player::new("Michel".to_string(), 50, 50, 50);
     let player2 = Player::new("Jacque".to_string(), 50, 50, 50);
 

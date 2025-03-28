@@ -79,13 +79,14 @@ fn start_counter(player: &Player, miss: Arc<Mutex<i32>>) -> i32 {
     }
     counter
 }
-fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
-    let mut total_score = 0;
-    let mut obejctif_index = 0;
 
+fn display_player_info(player: &Player, objectives: &Vec<i32>) {
     println!("Au tour de {} (Vitality={}, Speed={}, Strength={})", player.name, player.vitality, player.speed, player.strength);
     println!("→ Objectifs : {:?}", objectives);
     println!("→ Appuyer sur ENTREE pour démarrer le tour..");
+}
+
+fn wait_for_enter() {
     loop {
         if let Event::Key(key_event) = event::read().unwrap() {
             if key_event.code == KeyCode::Enter {
@@ -93,30 +94,42 @@ fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
             }
         }
     }
+}
+
+fn calculate_score(player: &Player, counter: i32, objective: i32, miss_value: i32) -> i32 {
+    let diff = (counter - objective).abs();
+    match diff {
+        0 => (100 + player.strength) / (miss_value + 1),
+        1..=5 => (80 + player.strength) / (miss_value + 1),
+        6..=10 => (60 + player.strength) / (miss_value + 1),
+        11..=20 => (40 + player.strength) / (miss_value + 1),
+        21..=40 => (20 + player.strength) / (miss_value + 1),
+        _ => (0 + player.strength) / (miss_value + 1),
+    }
+}
+
+fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
+    let mut total_score = 0;
+    let mut objectif_index = 0;
+
+    display_player_info(player, objectives);
+    wait_for_enter();
     
     for &objective in objectives.iter() {
         let miss = Arc::new(Mutex::new(0));
         let counter = start_counter(player, Arc::clone(&miss));
-        let diff = (counter - objective).abs();
         let miss_value = *miss.lock().unwrap();
-        let score = match diff {
-            0 => (100 + player.strength) / (miss_value + 1),
-            1..=5 => (80 + player.strength) / (miss_value + 1),
-            6..=10 => (60 + player.strength) / (miss_value + 1),
-            11..=20 => (40 + player.strength) / (miss_value + 1),
-            21..=40 => (20 + player.strength) / (miss_value + 1),
-            _ => (0 + player.strength) / (miss_value + 1),
-        };
+        let score = calculate_score(player, counter, objective, miss_value);
         total_score += score;
-        obejctif_index +=1 ;
+        objectif_index += 1;
         println!("→ Objectif {} : Miss = {} | Compteur = {}   // Score = {}", objective, miss_value, counter, score);
+        
         // Affiche les objectifs restants après chaque tour
-        let remaining_objectives: Vec<_> = objectives.iter().rev().take(objectives.len() - obejctif_index ).rev().collect();
+        let remaining_objectives: Vec<_> = objectives.iter().skip(objectif_index).cloned().collect();
         println!("→ Objectifs restants : {:?}", remaining_objectives);
-            
+        
         // Ajoute un délai après avoir appuyé sur Enter
         thread::sleep(Duration::from_secs(1));
-
     }
 
     let average_score = (total_score as f32 / objectives.len() as f32).ceil() as i32;
@@ -126,7 +139,6 @@ fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
     player.score = average_score;
     average_score
 }
-
 
 
 fn apply_poison(winner: &mut Player, loser: &mut Player) {

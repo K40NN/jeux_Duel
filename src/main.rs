@@ -1,12 +1,9 @@
-use rand::Rng;
-use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use crossterm::event::{self, Event, KeyCode};
-use crossterm::{execute, terminal::{Clear, ClearType}};
+use std::io::{self, Write};
+use rand::Rng;
 
-#[derive(Debug)]
 struct Player {
     name: String,
     vitality: i32,
@@ -15,19 +12,6 @@ struct Player {
     score: i32,
 }
 
-impl Player {
-    fn new(name: String, vitality: i32, speed: u64, strength: i32) -> Self {
-        Player {
-            name,
-            vitality,
-            speed,
-            strength,
-            score: 0,
-        }
-    }
-}
-
-#[derive(Debug)]
 struct Game {
     player1: Player,
     player2: Player,
@@ -51,88 +35,58 @@ impl Game {
         }
     }
 }
-fn start_counter(player: &Player, miss: Arc<Mutex<i32>>) -> i32 {
-    let mut counter = 0;
-    let miss_clone = Arc::clone(&miss);
-    let speed = player.speed;
-    loop {
-        counter = (counter + 1) % 101;
-        // Efface la ligne actuelle
-        execute!(io::stdout(), Clear(ClearType::CurrentLine)).unwrap();
-        
-        print!("\rCompteur = {}", counter);
-        io::stdout().flush().unwrap();
-        thread::sleep(Duration::from_millis(speed));
-        if counter == 0 {
-            let mut miss = miss_clone.lock().unwrap();
-            *miss += 1;
-            // Efface la ligne actuelle
-            execute!(io::stdout(), Clear(ClearType::CurrentLine)).unwrap();
-        }
-        if event::poll(Duration::from_millis(30)).unwrap() {
-            if let Event::Key(key_event) = event::read().unwrap() {
-                if key_event.code == KeyCode::Enter {
-                    break;
-                }
-            }
-        }
-    }
-    counter
-}
 
-fn display_player_info(player: &Player, objectives: &Vec<i32>) {
-    println!("Au tour de {} (Vitality={}, Speed={}, Strength={})", player.name, player.vitality, player.speed, player.strength);
-    println!("→ Objectifs : {:?}", objectives);
-    println!("→ Appuyer sur ENTREE pour démarrer le tour..");
-}
-
-fn wait_for_enter() {
-    loop {
-        if let Event::Key(key_event) = event::read().unwrap() {
-            if key_event.code == KeyCode::Enter {
-                break;
-            }
-        }
-    }
-}
-
-fn calculate_score(player: &Player, counter: i32, objective: i32, miss_value: i32) -> i32 {
-    let diff = (counter - objective).abs();
+fn calculate_score(diff: u32, miss: u32, strength: i32) -> i32 {
     match diff {
-        0 => (100 + player.strength) / (miss_value + 1),
-        1..=5 => (80 + player.strength) / (miss_value + 1),
-        6..=10 => (60 + player.strength) / (miss_value + 1),
-        11..=20 => (40 + player.strength) / (miss_value + 1),
-        21..=40 => (20 + player.strength) / (miss_value + 1),
-        _ => (0 + player.strength) / (miss_value + 1),
+        0 => (100 + strength) / (miss + 1) as i32,
+        1..=5 => (80 + strength) / (miss + 1) as i32,
+        6..=10 => (60 + strength) / (miss + 1) as i32,
+        11..=20 => (40 + strength) / (miss + 1) as i32,
+        21..=40 => (20 + strength) / (miss + 1) as i32,
+        _ => (0 + strength) / (miss + 1) as i32,
     }
 }
 
-fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
-    let mut total_score = 0;
-    let mut objectif_index = 0;
+fn play_turn(player: &mut Player, objectives: &[i32]) -> i32 {
+    let mut scores = vec![];
 
-    display_player_info(player, objectives);
-    wait_for_enter();
-    
-    for &objective in objectives.iter() {
-        let miss = Arc::new(Mutex::new(0));
-        let counter = start_counter(player, Arc::clone(&miss));
-        let miss_value = *miss.lock().unwrap();
-        let score = calculate_score(player, counter, objective, miss_value);
-        total_score += score;
-        objectif_index += 1;
-        println!("→ Objectif {} : Miss = {} | Compteur = {}   // Score = {}", objective, miss_value, counter, score);
-        
-        // Affiche les objectifs restants après chaque tour
-        let remaining_objectives: Vec<_> = objectives.iter().skip(objectif_index).cloned().collect();
-        println!("→ Objectifs restants : {:?}", remaining_objectives);
-        
-        // Ajoute un délai après avoir appuyé sur Enter
-        thread::sleep(Duration::from_secs(1));
+    println!("→ Objectifs : {:?}", objectives);
+    println!("→ Appuyer sur ENTREE pour démarrer le tour...");
+
+    for &objectif in objectives {
+        let (tx, rx) = mpsc::channel();
+        let speed = player.speed;
+
+        let handle = thread::spawn(move || {
+            let mut counter = 0;
+            let mut miss = 0;
+            loop {
+                if rx.try_recv().is_ok() {
+                    return (counter, miss);
+                }
+                print!("\r{:width$}\r→ Objectif {} : Miss = {} | Compteur = {}", "", objectif, miss, counter, width = 50);
+                io::stdout().flush().unwrap();
+
+                counter = (counter + 1) % 100;
+                if counter == 0 {
+                    miss += 1;
+                }
+                thread::sleep(Duration::from_millis(speed));
+            }
+        });
+
+        let _ = io::stdin().read_line(&mut String::new());
+        tx.send(()).unwrap();
+
+        let (final_counter, miss): (i32, i32) = handle.join().unwrap();
+        let diff = (final_counter - objectif).abs() as u32;
+        let score = calculate_score(diff, miss as u32, player.strength);
+        println!(" | Score obtenu : {}", score);
+        scores.push(score);
     }
 
-    let average_score = (total_score as f32 / objectives.len() as f32).ceil() as i32;
+    let total_score: i32 = scores.iter().sum();
+    let average_score = (total_score as f32 / scores.len() as f32).ceil() as i32;
     println!("# Fin du tour #");
     println!("→ Score moyen {}", average_score);
 
@@ -140,60 +94,28 @@ fn play_turn(player: &mut Player, objectives: &Vec<i32>) -> i32 {
     average_score
 }
 
-
-fn apply_poison(winner: &mut Player, loser: &mut Player) {
-    println!("{} vous devez choisir quel poison appliquer à {} :", winner.name, loser.name);
-    println!("→ 1: -5 speed");
-    println!("→ 2: -5 strength");
-
-    let mut choice = String::new();
-    io::stdin().read_line(&mut choice).unwrap();
-    let choice = choice.trim().parse::<i32>().unwrap_or(0);
-
-    match choice {
-        1 => loser.speed = loser.speed.saturating_sub(5),
-        2 => loser.strength = loser.strength.saturating_sub(5),
-        _ => println!("Choix invalide, aucun poison appliqué."),
-    }
-}
-
 fn main() {
-    let player1 = Player::new("Michel".to_string(), 50, 50, 50);
-    let player2 = Player::new("Jacque".to_string(), 50, 50, 50);
+    let player1 = Player {
+        name: String::from("Player1"),
+        vitality: 10,
+        speed: 100,
+        strength: 8,
+        score: 0,
+    };
+    let player2 = Player {
+        name: String::from("Player2"),
+        vitality: 12,
+        speed: 90,
+        strength: 9,
+        score: 0,
+    };
 
     let mut game = Game::new(player1, player2);
+    game.generate_objectives(3);
 
-    while game.player1.vitality > 0 && game.player2.vitality > 0 {
-        game.generate_objectives(5);
-        let objectives_player1 = game.objectives.clone();
-        game.generate_objectives(5);
-        let objectives_player2 = game.objectives.clone();
+    println!("Tour de {}", game.player1.name);
+    play_turn(&mut game.player1, &game.objectives);
 
-        let score1 = {
-            play_turn(&mut game.player1, &objectives_player1)
-        };
-        
-        let score2 = {
-            play_turn(&mut game.player2, &objectives_player2)
-        };
-
-        if score1 > score2 {
-            println!("{} gagne la manche.", game.player1.name);
-            game.player2.vitality -= score1 - score2;
-            apply_poison(&mut game.player1, &mut game.player2);
-        } else {
-            println!("{} gagne la manche.", game.player2.name);
-            game.player1.vitality -= score2 - score1;
-            apply_poison(&mut game.player2, &mut game.player1);
-        }
-
-        println!("Vitalité de {}: {}", game.player1.name, game.player1.vitality);
-        println!("Vitalité de {}: {}", game.player2.name, game.player2.vitality);
-    }
-
-    if game.player1.vitality <= 0 {
-        println!("{} a perdu la partie.", game.player1.name);
-    } else {
-        println!("{} a perdu la partie.", game.player2.name);
-    }
+    println!("Tour de {}", game.player2.name);
+    play_turn(&mut game.player2, &game.objectives);
 }

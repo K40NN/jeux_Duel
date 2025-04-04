@@ -94,16 +94,16 @@ fn play_turn(player: &mut Player, objectives: &[i32]) -> i32 {
 
 fn apply_poison(winner: &mut Player, loser: &mut Player) {
     println!("{} vous devez choisir quel poison appliquer à {} :", winner.name, loser.name);
-    println!("→ 1: -15 speed -le compteur passe + vite-");
-    println!("→ 2: -5 strength -penalité sur le calcul du score-");
+    println!("→ 1: -50 speed -le compteur passe + vite-");
+    println!("→ 2: -10 strength -penalité sur le calcul du score-");
 
     let mut choice = String::new();
     io::stdin().read_line(&mut choice).unwrap();
     let choice = choice.trim().parse::<i32>().unwrap_or(0);
 
     match choice {
-        1 => loser.speed = loser.speed.saturating_sub(15),
-        2 => loser.strength = loser.strength.saturating_sub(5),
+        1 => loser.speed = loser.speed.saturating_sub(50),
+        2 => loser.strength = loser.strength.saturating_sub(10),
         _ => println!("Choix invalide, aucun poison appliqué."),
     }
 }
@@ -111,15 +111,15 @@ fn apply_poison(winner: &mut Player, loser: &mut Player) {
 fn main() {
     let player1 = Player {
         name: String::from("Michel"),
-        vitality: 50,
-        speed: 50,
+        vitality: 100,
+        speed: 150,
         strength: 50,
         score: 0,
     };
     let player2 = Player {
         name: String::from("Jacque"),
-        vitality: 50,
-        speed: 50,
+        vitality: 100,
+        speed: 150,
         strength: 50,
         score: 0,
     };

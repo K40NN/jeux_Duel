@@ -94,28 +94,66 @@ fn play_turn(player: &mut Player, objectives: &[i32]) -> i32 {
     average_score
 }
 
+fn apply_poison(winner: &mut Player, loser: &mut Player) {
+    println!("{} vous devez choisir quel poison appliquer à {} :", winner.name, loser.name);
+    println!("→ 1: -5 speed");
+    println!("→ 2: -5 strength");
+
+    let mut choice = String::new();
+    io::stdin().read_line(&mut choice).unwrap();
+    let choice = choice.trim().parse::<i32>().unwrap_or(0);
+
+    match choice {
+        1 => loser.speed = loser.speed.saturating_sub(5),
+        2 => loser.strength = loser.strength.saturating_sub(5),
+        _ => println!("Choix invalide, aucun poison appliqué."),
+    }
+}
+
 fn main() {
     let player1 = Player {
-        name: String::from("Player1"),
-        vitality: 10,
-        speed: 100,
-        strength: 8,
+        name: String::from("Michel"),
+        vitality: 50,
+        speed: 50,
+        strength: 50,
         score: 0,
     };
     let player2 = Player {
-        name: String::from("Player2"),
-        vitality: 12,
-        speed: 90,
-        strength: 9,
+        name: String::from("Jacque"),
+        vitality: 50,
+        speed: 50,
+        strength: 50,
         score: 0,
     };
 
     let mut game = Game::new(player1, player2);
-    game.generate_objectives(3);
 
-    println!("Tour de {}", game.player1.name);
-    play_turn(&mut game.player1, &game.objectives);
+    while game.player1.vitality > 0 && game.player2.vitality > 0 {
+        game.generate_objectives(5);
+        let objectives_player1 = game.objectives.clone();
+        game.generate_objectives(5);
+        let objectives_player2 = game.objectives.clone();
 
-    println!("Tour de {}", game.player2.name);
-    play_turn(&mut game.player2, &game.objectives);
+        let score1 = play_turn(&mut game.player1, &objectives_player1);
+        let score2 = play_turn(&mut game.player2, &objectives_player2);
+
+        if score1 > score2 {
+            println!("{} gagne la manche.", game.player1.name);
+            game.player2.vitality -= score1 - score2;
+            apply_poison(&mut game.player1, &mut game.player2);
+        } else {
+            println!("{} gagne la manche.", game.player2.name);
+            game.player1.vitality -= score2 - score1;
+            apply_poison(&mut game.player2, &mut game.player1);
+        }
+
+        println!("Vitalité de {}: {}", game.player1.name, game.player1.vitality);
+        println!("Vitalité de {}: {}", game.player2.name, game.player2.vitality);
+    }
+
+    if game.player1.vitality <= 0 {
+        println!("{} a perdu la partie.", game.player1.name);
+    } else {
+        println!("{} a perdu la partie.", game.player2.name);
+    }
 }

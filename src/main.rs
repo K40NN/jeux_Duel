@@ -37,14 +37,16 @@ impl Game {
 }
 
 fn calculate_score(diff: u32, miss: u32, strength: i32) -> i32 {
-    match diff {
+    let score = match diff {
         0 => (100 + strength) / (miss + 1) as i32,
         1..=5 => (80 + strength) / (miss + 1) as i32,
         6..=10 => (60 + strength) / (miss + 1) as i32,
         11..=20 => (40 + strength) / (miss + 1) as i32,
         21..=40 => (20 + strength) / (miss + 1) as i32,
         _ => (0 + strength) / (miss + 1) as i32,
-    }
+    };
+    println!("Détails du score : (diff {} + strength {}) / (miss{} + 1) = score : {}", score*(miss as i32 + 1)-strength, strength, miss, score);
+    score
 }
 
 fn play_turn(player: &mut Player, objectives: &[i32]) -> i32 {
@@ -77,7 +79,6 @@ fn play_turn(player: &mut Player, objectives: &[i32]) -> i32 {
         let (final_counter, miss): (i32, i32) = handle.join().unwrap();
         let diff = (final_counter - objectif).abs() as u32;
         let score = calculate_score(diff, miss as u32, player.strength);
-        println!(" | Score obtenu : {}", score);
         scores.push(score);
         let _ = io::stdin().read_line(&mut String::new());
     }
